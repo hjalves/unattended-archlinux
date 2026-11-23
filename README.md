@@ -115,7 +115,7 @@ The generated installation uses:
 - Additional packages: `git`, `htop`, `less`, `openssh`, `terminus-font`
 - SSH server: `sshd` enabled on boot
 - Networking: systemd-networkd with IPv4 DHCP on physical Ethernet interfaces; IPv6 disabled
-- DNS: systemd-resolved
+- DNS: systemd-resolved with multicast DNS enabled
 
 These values are defined near the top of `make-pxe-unattended.sh` and in the generated installer/configuration. Review and change them before running the script if they do not match your environment.
 

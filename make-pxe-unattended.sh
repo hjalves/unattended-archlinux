@@ -134,40 +134,27 @@ directory.mkdir(parents=True, exist_ok=True)
 
 config = {
     "archinstall-language": "English",
-
     "bootloader": "Grub",
-
     "hostname": os.environ["HOSTNAME"],
-
     "kernels": ["linux"],
-
     "locale_config": {
-        "kb_layout": "us",
+        "kb_layout": "uk",
         "sys_enc": "UTF-8",
         "sys_lang": "en_US",
         "console_font": "ter-132b"
     },
-
     "mirror_config": {
         "mirror_regions": {
             "Portugal": []
         }
     },
-
     "ntp": True,
-
     "packages": ["git", "htop", "less", "openssh", "terminus-font"],
-
     "profile_config": None,
-
     "services": ["sshd", "systemd-networkd", "systemd-resolved"],
-
     "silent": True,
-
     "swap": False,
-
     "timezone": "Europe/Lisbon",
-
     "disk_config": {
         "config_type": "pre_mounted_config",
         "mountpoint": "/mnt/archinstall"
@@ -324,11 +311,19 @@ printf '\nFONT=ter-132b\n' >> "$MOUNT/etc/vconsole.conf"
 
 echo "Configuring target networking..."
 
-mkdir -p "$MOUNT/etc/systemd/network" "$MOUNT/etc/sysctl.d"
+mkdir -p \
+    "$MOUNT/etc/systemd/network" \
+    "$MOUNT/etc/systemd/resolved.conf.d" \
+    "$MOUNT/etc/sysctl.d"
 cat > "$MOUNT/etc/sysctl.d/90-disable-ipv6.conf" <<'SYSCTL'
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 SYSCTL
+
+cat > "$MOUNT/etc/systemd/resolved.conf.d/10-mdns.conf" <<'RESOLVED'
+[Resolve]
+MulticastDNS=yes
+RESOLVED
 
 cat > "$MOUNT/etc/systemd/network/20-ethernet.network" <<'NETWORK'
 [Match]
