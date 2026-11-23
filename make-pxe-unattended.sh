@@ -97,6 +97,16 @@ echo "Extracting airootfs.sfs..."
 
 unsquashfs -d "$ROOTFS" "$SFS"
 
+if [[ ! -f "$ROOTFS/usr/share/kbd/consolefonts/ter-132b.psf.gz" ]]; then
+    echo "The ISO does not contain the ter-132b console font." >&2
+    exit 1
+fi
+
+if [[ -f "$ROOTFS/etc/vconsole.conf" ]]; then
+    sed -i '/^[[:space:]]*FONT[[:space:]]*=/d' "$ROOTFS/etc/vconsole.conf"
+fi
+printf '\nFONT=ter-132b\n' >> "$ROOTFS/etc/vconsole.conf"
+
 # ---------------------------------------------------------
 # Archinstall configuration
 # ---------------------------------------------------------
@@ -134,7 +144,8 @@ config = {
     "locale_config": {
         "kb_layout": "us",
         "sys_enc": "UTF-8",
-        "sys_lang": "en_US"
+        "sys_lang": "en_US",
+        "console_font": "ter-132b"
     },
 
     "mirror_config": {
@@ -145,9 +156,11 @@ config = {
 
     "ntp": True,
 
-    "packages": ["git"],
+    "packages": ["git", "openssh", "terminus-font"],
 
     "profile_config": None,
+
+    "services": ["sshd", "systemd-networkd", "systemd-resolved"],
 
     "silent": True,
 
@@ -293,6 +306,35 @@ archinstall \
     --config /root/pxe-install/user_configuration.json \
     --creds /root/pxe-install/user_credentials.json \
     --silent
+
+if ! mountpoint -q "$MOUNT"; then
+    echo "Target filesystem is not mounted: $MOUNT" >&2
+    exit 1
+fi
+
+if [[ ! -f "$MOUNT/usr/share/kbd/consolefonts/ter-132b.psf.gz" ]]; then
+    echo "The target system does not contain the ter-132b console font." >&2
+    exit 1
+fi
+
+if [[ -f "$MOUNT/etc/vconsole.conf" ]]; then
+    sed -i '/^[[:space:]]*FONT[[:space:]]*=/d' "$MOUNT/etc/vconsole.conf"
+fi
+printf '\nFONT=ter-132b\n' >> "$MOUNT/etc/vconsole.conf"
+
+echo "Configuring target networking..."
+
+mkdir -p "$MOUNT/etc/systemd/network"
+cat > "$MOUNT/etc/systemd/network/20-ethernet.network" <<'NETWORK'
+[Match]
+Kind=!*
+Type=ether
+
+[Network]
+DHCP=yes
+NETWORK
+
+ln -sfnT /run/systemd/resolve/stub-resolv.conf "$MOUNT/etc/resolv.conf"
 
 echo "Installation completed successfully."
 

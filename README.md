@@ -23,6 +23,7 @@ The workflow is:
 - `python3`
 - `sfdisk`
 - An Arch Linux ISO
+- The ISO must contain the `ter-132b` console font (provided by `terminus-font`)
 - A writable PXE/HTTP/TFTP tree at `/srv/tftp/archiso`
 - An existing GRUB PXE configuration that boots the Arch image
 
@@ -59,6 +60,7 @@ The script:
 - Reads `/srv/tftp/archiso/arch/x86_64/airootfs.sfs`
 - Prompts for the new user's password
 - Adds Archinstall configuration and credentials
+- Configures the live console to use `ter-132b`
 - Installs a systemd service that starts the installer automatically
 - Rebuilds the SquashFS image
 - Saves the original image as `airootfs.sfs.original`
@@ -80,12 +82,18 @@ The generated installation uses:
 - User: `dk`
 - Locale: `en_US.UTF-8`
 - Keyboard layout: `us`
+- Console font: `ter-132b`
 - Time zone: `Europe/Lisbon`
 - NTP: enabled
 - Swap: disabled
-- Additional package: `git`
+- Additional packages: `git`, `openssh`, `terminus-font`
+- SSH server: `sshd` enabled on boot
+- Networking: systemd-networkd with DHCP on physical Ethernet interfaces
+- DNS: systemd-resolved
 
 These values are defined near the top of `make-pxe-unattended.sh` and in the generated installer/configuration. Review and change them before running the script if they do not match your environment.
+
+Ethernet connectivity requires a DHCP server. Wi-Fi is not configured.
 
 ## Restoring the original image
 
