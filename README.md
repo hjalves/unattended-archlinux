@@ -98,7 +98,7 @@ menuentry "Arch Linux - Automated Installation (WIPES DISK)" --id arch-install {
 
 The kernel and initramfs are loaded from TFTP. The `archiso_http_srv` URL must serve the extracted image over HTTP, with the `arch` directory beneath `/archiso/`. Replace `192.168.10.2:8888` with the PXE server's HTTP address and port, and change `eth0` if the client uses a different interface name.
 
-The installer writes `/etc/pxe-installed` to the new system, so after installation every PXE boot of that machine defaults to its local disk instead of reinstalling. To reinstall, pick the installation entry in the menu. The installer formats the partitions without the `metadata_csum_seed` ext4 feature, because older netboot GRUB (2.06) cannot read filesystems that use it.
+The installer writes `/etc/pxe-installed` to the new system, so after installation every PXE boot of that machine defaults to its local disk instead of reinstalling. To reinstall, pick the installation entry in the menu. The netboot GRUB must be 2.12 or newer: older versions cannot read the ext4 filesystems current `mkfs.ext4` creates (`metadata_csum_seed`), so they never find the marker.
 
 ### 3. Configure the unattended installer
 

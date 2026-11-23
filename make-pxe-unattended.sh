@@ -298,10 +298,8 @@ udevadm settle
 
 echo "Formatting partitions..."
 
-# metadata_csum_seed is off so the PXE server's GRUB (2.06 cannot read
-# filesystems with that feature) can find /etc/pxe-installed.
-mkfs.ext4 -F -O ^metadata_csum_seed "$BOOT_PART"
-mkfs.ext4 -F -O ^metadata_csum_seed "$ROOT_PART"
+mkfs.ext4 -F "$BOOT_PART"
+mkfs.ext4 -F "$ROOT_PART"
 
 # ---------------------------------------------------------
 # Mount target
