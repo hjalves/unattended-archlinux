@@ -156,7 +156,7 @@ config = {
 
     "ntp": True,
 
-    "packages": ["git", "openssh", "terminus-font"],
+    "packages": ["git", "htop", "less", "openssh", "terminus-font"],
 
     "profile_config": None,
 
@@ -324,14 +324,21 @@ printf '\nFONT=ter-132b\n' >> "$MOUNT/etc/vconsole.conf"
 
 echo "Configuring target networking..."
 
-mkdir -p "$MOUNT/etc/systemd/network"
+mkdir -p "$MOUNT/etc/systemd/network" "$MOUNT/etc/sysctl.d"
+cat > "$MOUNT/etc/sysctl.d/90-disable-ipv6.conf" <<'SYSCTL'
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+SYSCTL
+
 cat > "$MOUNT/etc/systemd/network/20-ethernet.network" <<'NETWORK'
 [Match]
 Kind=!*
 Type=ether
 
 [Network]
-DHCP=yes
+DHCP=ipv4
+IPv6AcceptRA=no
+LinkLocalAddressing=ipv4
 NETWORK
 
 ln -sfnT /run/systemd/resolve/stub-resolv.conf "$MOUNT/etc/resolv.conf"

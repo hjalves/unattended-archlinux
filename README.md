@@ -96,9 +96,9 @@ The generated installation uses:
 - Time zone: `Europe/Lisbon`
 - NTP: enabled
 - Swap: disabled
-- Additional packages: `git`, `openssh`, `terminus-font`
+- Additional packages: `git`, `htop`, `less`, `openssh`, `terminus-font`
 - SSH server: `sshd` enabled on boot
-- Networking: systemd-networkd with DHCP on physical Ethernet interfaces
+- Networking: systemd-networkd with IPv4 DHCP on physical Ethernet interfaces; IPv6 disabled
 - DNS: systemd-resolved
 
 These values are defined near the top of `make-pxe-unattended.sh` and in the generated installer/configuration. Review and change them before running the script if they do not match your environment.
