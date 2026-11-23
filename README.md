@@ -57,6 +57,22 @@ Run:
 
 The script mounts the ISO read-only, copies its contents to `/srv/tftp/archiso`, and unmounts it when finished.
 
+### GRUB PXE menuentry
+
+Add a menuentry like this to the GRUB PXE configuration:
+
+```grub
+menuentry "Arch Linux - Automated Installation" {
+    linux (tftp)/archiso/arch/boot/x86_64/vmlinuz-linux \
+        archisobasedir=arch \
+        archiso_http_srv=http://192.168.10.2:8888/archiso/ \
+        ip=:::::eth0:dhcp
+    initrd (tftp)/archiso/arch/boot/x86_64/initramfs-linux.img
+}
+```
+
+The kernel and initramfs are loaded from TFTP. The `archiso_http_srv` URL must serve the extracted image over HTTP, with the `arch` directory beneath `/archiso/`. Replace `192.168.10.2:8888` with the PXE server's HTTP address and port, and change `eth0` if the client uses a different interface name.
+
 ### 3. Configure the unattended installer
 
 Run as root:
