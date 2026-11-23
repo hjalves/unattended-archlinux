@@ -3,6 +3,11 @@ set -Eeuo pipefail
 
 ISO_ROOT="/srv/tftp/archiso"
 SFS="$ISO_ROOT/arch/x86_64/airootfs.sfs"
+SFS_DIR="$(dirname -- "$SFS")"
+# Files that describe the original image. They are backed up with an
+# .original suffix; signatures cannot be regenerated, so they are only moved.
+SHA512="$SFS_DIR/airootfs.sha512"
+SIGS=("$SFS.sig" "$SFS.cms.sig")
 
 DISK="/dev/sda"
 USERNAME="dk"
@@ -20,7 +25,7 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-for cmd in unsquashfs mksquashfs openssl python3 sfdisk; do
+for cmd in unsquashfs mksquashfs openssl python3 sha512sum; do
     command -v "$cmd" >/dev/null || {
         echo "Missing dependency: $cmd" >&2
         exit 1
@@ -37,9 +42,17 @@ done
     exit 1
 }
 
-if [[ -e "$SFS.original" ]]; then
-    echo "Backup already exists: $SFS.original"
-    echo "Refusing to overwrite it."
+for f in "$SFS" "$SHA512" "${SIGS[@]}"; do
+    if [[ -e "$f.original" ]]; then
+        echo "Backup already exists: $f.original"
+        echo "Refusing to overwrite it."
+        exit 1
+    fi
+done
+
+if [[ -e "$SFS.new" ]]; then
+    echo "Leftover image from an interrupted run: $SFS.new"
+    echo "Remove it manually before running this script again."
     exit 1
 fi
 
@@ -83,7 +96,8 @@ unset PASSWORD PASSWORD_CONFIRM
 mkdir -p "$ROOTFS"
 
 cleanup() {
-    rm -rf "$WORK"
+    rm -rf -- "$WORK"
+    rm -f -- "$SFS.new"
 }
 
 trap cleanup EXIT
@@ -134,7 +148,11 @@ directory.mkdir(parents=True, exist_ok=True)
 
 config = {
     "archinstall-language": "English",
-    "bootloader": "Grub",
+    "bootloader_config": {
+        "bootloader": "Grub",
+        "uki": False,
+        "removable": False
+    },
     "hostname": os.environ["HOSTNAME"],
     "kernels": ["linux"],
     "locale_config": {
@@ -319,11 +337,6 @@ if [[ ! -f "$MOUNT/usr/share/kbd/consolefonts/ter-132b.psf.gz" ]]; then
     exit 1
 fi
 
-if [[ -f "$MOUNT/etc/vconsole.conf" ]]; then
-    sed -i '/^[[:space:]]*FONT[[:space:]]*=/d' "$MOUNT/etc/vconsole.conf"
-fi
-printf '\nFONT=ter-132b\n' >> "$MOUNT/etc/vconsole.conf"
-
 echo "Configuring target networking..."
 
 mkdir -p \
@@ -378,7 +391,7 @@ mkdir -p "$ROOTFS/etc/systemd/system/multi-user.target.wants"
 cat > "$ROOTFS/etc/systemd/system/pxe-install.service" <<'SERVICE'
 [Unit]
 Description=Unattended Arch Linux PXE Installation
-After=network.target
+After=network.target pacman-init.service
 Wants=network.target
 ConditionPathExists=/root/pxe-install/user_configuration.json
 
@@ -404,10 +417,14 @@ ln -sfn \
 echo
 echo "Rebuilding airootfs.sfs..."
 
-mksquashfs "$ROOTFS" "$WORK/airootfs.sfs" \
+# Build next to the original so the final swap is an atomic rename on
+# the same filesystem; clients never see a missing or partial image.
+mksquashfs "$ROOTFS" "$SFS.new" \
     -noappend \
     -comp zstd \
     -b 1M
+
+chmod 644 "$SFS.new"
 
 # ---------------------------------------------------------
 # Replace original image
@@ -416,18 +433,23 @@ mksquashfs "$ROOTFS" "$WORK/airootfs.sfs" \
 echo
 echo "Backing up original image..."
 
-mv "$SFS" "$SFS.original"
+# Hard link: the original stays in place until the rename below.
+ln -T -- "$SFS" "$SFS.original"
+
+for f in "$SHA512" "${SIGS[@]}"; do
+    if [[ -e "$f" ]]; then
+        mv -T -- "$f" "$f.original"
+    fi
+done
 
 echo "Installing modified image..."
 
-if ! mv "$WORK/airootfs.sfs" "$SFS"; then
-    echo "Failed to replace image. Restoring original..."
+mv -T -- "$SFS.new" "$SFS"
 
-    mv "$SFS.original" "$SFS"
-    exit 1
-fi
-
-chmod 644 "$SFS"
+# Regenerate the checksum archiso uses with checksum=y. The signatures
+# (.sig, .cms.sig) were moved aside and cannot be recreated, so do not
+# boot this image with verify=y or cms_verify=y.
+(cd "$SFS_DIR" && sha512sum airootfs.sfs > airootfs.sha512)
 
 echo
 echo "========================================"

@@ -23,7 +23,7 @@ The workflow is:
 - `mksquashfs`
 - `openssl`
 - `python3`
-- `sfdisk`
+- `sha512sum`
 - An Arch Linux ISO
 - The ISO must contain the `ter-132b` console font (provided by `terminus-font`)
 - A writable PXE/HTTP/TFTP tree at `/srv/tftp/archiso`
@@ -55,7 +55,9 @@ Run:
 ./extract-archiso.sh archlinux-YYYY.MM.DD-x86_64.iso
 ```
 
-The script mounts the ISO read-only, copies its contents to `/srv/tftp/archiso`, and unmounts it when finished.
+The script mounts the ISO read-only, copies its contents into a fresh `/srv/tftp/archiso.new`, and then swaps it in as `/srv/tftp/archiso`. Files from an older ISO are never mixed with the new one. The tree being replaced (including any `airootfs.sfs.original` backup from `make-pxe-unattended.sh`) is kept as `/srv/tftp/archiso.previous` until the next extraction, which deletes it.
+
+After extracting a new ISO, run `make-pxe-unattended.sh` again.
 
 ### GRUB PXE menuentry
 
@@ -88,9 +90,12 @@ The script:
 - Adds Archinstall configuration and credentials
 - Configures the live console to use `ter-132b`
 - Installs a systemd service that starts the installer automatically
-- Rebuilds the SquashFS image
+- Rebuilds the SquashFS image next to the original
 - Saves the original image as `airootfs.sfs.original`
-- Replaces the PXE image with the modified image
+- Atomically replaces the PXE image with the modified image
+- Regenerates `airootfs.sha512` and moves the original `airootfs.sha512` and the signatures (`airootfs.sfs.sig`, `airootfs.sfs.cms.sig`) aside with an `.original` suffix
+
+The signatures cannot be regenerated for the modified image, so do not boot it with `verify=y` or `cms_verify=y`. `checksum=y` works.
 
 After it completes, boot the client using the existing GRUB PXE entry.
 
@@ -123,11 +128,13 @@ Ethernet connectivity requires a DHCP server. Wi-Fi is not configured.
 
 ## Restoring the original image
 
-The preparation script refuses to overwrite an existing backup. To restore the original image:
+The preparation script refuses to overwrite an existing backup. To restore the original image, checksum and signatures:
 
 ```bash
-sudo mv /srv/tftp/archiso/arch/x86_64/airootfs.sfs.original \
-  /srv/tftp/archiso/arch/x86_64/airootfs.sfs
+cd /srv/tftp/archiso/arch/x86_64
+for f in airootfs.sfs airootfs.sha512 airootfs.sfs.sig airootfs.sfs.cms.sig; do
+    [[ -e "$f.original" ]] && sudo mv -T "$f.original" "$f"
+done
 ```
 
 Only remove or replace the backup after verifying that the modified image is no longer needed.
