@@ -61,10 +61,33 @@ After extracting a new ISO, run `make-pxe-unattended.sh` again.
 
 ### GRUB PXE menuentry
 
-Add a menuentry like this to the GRUB PXE configuration:
+Add entries like these to the GRUB PXE configuration (BIOS netboot GRUB):
 
 ```grub
-menuentry "Arch Linux - Automated Installation" {
+insmod biosdisk
+insmod part_msdos
+insmod ext2
+insmod search_fs_file
+insmod regexp
+set timeout=5
+
+# Machines installed by the unattended Arch installer have
+# /etc/pxe-installed on their root partition. If a local disk has it, boot
+# that disk by default instead of reinstalling (which would wipe it again).
+set disk=hd0
+if search --no-floppy --file --set=found /etc/pxe-installed; then
+    regexp --set=1:disk '^(hd[0-9]+)' "$found"
+    set default=local
+else
+    set default=arch-install
+fi
+
+menuentry "Boot from hard drive" --id local {
+    set root=($disk)
+    chainloader +1
+}
+
+menuentry "Arch Linux - Automated Installation (WIPES DISK)" --id arch-install {
     linux (tftp)/archiso/arch/boot/x86_64/vmlinuz-linux \
         archisobasedir=arch \
         archiso_http_srv=http://192.168.10.2:8888/archiso/ \
@@ -74,6 +97,8 @@ menuentry "Arch Linux - Automated Installation" {
 ```
 
 The kernel and initramfs are loaded from TFTP. The `archiso_http_srv` URL must serve the extracted image over HTTP, with the `arch` directory beneath `/archiso/`. Replace `192.168.10.2:8888` with the PXE server's HTTP address and port, and change `eth0` if the client uses a different interface name.
+
+The installer writes `/etc/pxe-installed` to the new system, so after installation every PXE boot of that machine defaults to its local disk instead of reinstalling. To reinstall, pick the installation entry in the menu. The installer formats the partitions without the `metadata_csum_seed` ext4 feature, because older netboot GRUB (2.06) cannot read filesystems that use it.
 
 ### 3. Configure the unattended installer
 

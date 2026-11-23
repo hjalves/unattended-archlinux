@@ -298,8 +298,10 @@ udevadm settle
 
 echo "Formatting partitions..."
 
-mkfs.ext4 -F "$BOOT_PART"
-mkfs.ext4 -F "$ROOT_PART"
+# metadata_csum_seed is off so the PXE server's GRUB (2.06 cannot read
+# filesystems with that feature) can find /etc/pxe-installed.
+mkfs.ext4 -F -O ^metadata_csum_seed "$BOOT_PART"
+mkfs.ext4 -F -O ^metadata_csum_seed "$ROOT_PART"
 
 # ---------------------------------------------------------
 # Mount target
@@ -366,6 +368,10 @@ LinkLocalAddressing=ipv4
 NETWORK
 
 ln -sfnT /run/systemd/resolve/stub-resolv.conf "$MOUNT/etc/resolv.conf"
+
+# Marker for the PXE GRUB menu: when it finds this file on a local disk,
+# it boots that disk by default instead of reinstalling.
+date -u +%Y-%m-%dT%H:%M:%SZ > "$MOUNT/etc/pxe-installed"
 
 echo "Installation completed successfully."
 
