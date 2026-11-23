@@ -34,7 +34,7 @@ The workflow is:
 The client must:
 
 - Boot the Arch image through PXE
-- Have the target disk available as `/dev/sda`
+- Have the target disk available at the path set by `DISK` in `make-pxe-unattended.sh` (default `/dev/sda`)
 - Have network connectivity during installation
 
 ## Usage
@@ -107,7 +107,7 @@ The generated installation uses:
 - Hostname: `arch`
 - User: `dk`
 - Locale: `en_US.UTF-8`
-- Keyboard layout: `us`
+- Keyboard layout: `uk`
 - Console font: `ter-132b`
 - Time zone: `Europe/Lisbon`
 - NTP: enabled
@@ -135,7 +135,7 @@ Only remove or replace the backup after verifying that the modified image is no 
 ## Safety notes
 
 - The installer waits for network connectivity before modifying the disk.
-- The target disk is not discovered automatically; `/dev/sda` is hard-coded.
+- The target disk is not discovered automatically; it is set by `DISK` at the top of `make-pxe-unattended.sh` (default `/dev/sda`).
 - The installation runs automatically from a systemd `oneshot` service.
 - The temporary build directory is `/var/tmp/arch-pxe-build`; an existing directory causes the preparation script to stop.
 - The generated credentials are placed inside the image. Protect the PXE image and PXE network accordingly.

@@ -187,6 +187,9 @@ PY
 [[ -s "$CONFIG_DIR/user_configuration.json" ]]
 [[ -s "$CONFIG_DIR/user_credentials.json" ]]
 
+# Pass the target disk to the installer.
+printf 'DISK=%q\n' "$DISK" > "$CONFIG_DIR/install.env"
+
 # ---------------------------------------------------------
 # Automatic installer
 # ---------------------------------------------------------
@@ -202,8 +205,20 @@ LOG="/var/log/pxe-install.log"
 
 exec > >(tee -a "$LOG") 2>&1
 
-DISK="/dev/sda"
+source /root/pxe-install/install.env
 MOUNT="/mnt/archinstall"
+
+# Partition names: /dev/sda -> /dev/sda1, /dev/nvme0n1 -> /dev/nvme0n1p1,
+# /dev/disk/by-id/<id> -> /dev/disk/by-id/<id>-part1.
+if [[ "$DISK" == /dev/disk/by-* ]]; then
+    PART_PREFIX="${DISK}-part"
+elif [[ "$DISK" =~ [0-9]$ ]]; then
+    PART_PREFIX="${DISK}p"
+else
+    PART_PREFIX="$DISK"
+fi
+BOOT_PART="${PART_PREFIX}1"
+ROOT_PART="${PART_PREFIX}2"
 
 echo "========================================"
 echo " Starting unattended Arch installation"
@@ -265,8 +280,8 @@ udevadm settle
 
 echo "Formatting partitions..."
 
-mkfs.ext4 -F "${DISK}1"
-mkfs.ext4 -F "${DISK}2"
+mkfs.ext4 -F "$BOOT_PART"
+mkfs.ext4 -F "$ROOT_PART"
 
 # ---------------------------------------------------------
 # Mount target
@@ -274,11 +289,11 @@ mkfs.ext4 -F "${DISK}2"
 
 mkdir -p "$MOUNT"
 
-mount "${DISK}2" "$MOUNT"
+mount "$ROOT_PART" "$MOUNT"
 
 mkdir -p "$MOUNT/boot"
 
-mount "${DISK}1" "$MOUNT/boot"
+mount "$BOOT_PART" "$MOUNT/boot"
 
 echo "Disk layout:"
 lsblk -f "$DISK"
@@ -332,6 +347,7 @@ Type=ether
 
 [Network]
 DHCP=ipv4
+MulticastDNS=yes
 IPv6AcceptRA=no
 LinkLocalAddressing=ipv4
 NETWORK
