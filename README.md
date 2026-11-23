@@ -45,14 +45,14 @@ The client must:
 ./download-archiso.sh
 ```
 
-This downloads the latest x86_64 ISO as `archlinux-x86_64.iso` in the current directory and checks its SHA-256 checksum against Arch Linux's published checksum. An optional output path can be supplied; existing files are not overwritten. If the release changes during the download, retry the script.
+This downloads the latest x86_64 ISO with its original, dated filename (for example, `archlinux-2026.11.01-x86_64.iso`) in the current directory and checks its SHA-256 checksum against Arch Linux's published checksum. An optional output path can be supplied; existing files are not overwritten.
 
 ### 2. Extract the Arch ISO
 
 Run:
 
 ```bash
-./extract-archiso.sh archlinux-x86_64.iso
+./extract-archiso.sh archlinux-YYYY.MM.DD-x86_64.iso
 ```
 
 The script mounts the ISO read-only, copies its contents to `/srv/tftp/archiso`, and unmounts it when finished.

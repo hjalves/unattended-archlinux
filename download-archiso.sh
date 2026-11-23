@@ -6,15 +6,7 @@ if [[ $# -gt 1 ]]; then
     exit 1
 fi
 
-OUTPUT="${1:-archlinux-x86_64.iso}"
-ISO_NAME="archlinux-x86_64.iso"
 CHECKSUM_URL="https://archlinux.org/iso/latest/sha256sums.txt"
-ISO_URL="https://fastly.mirror.pkgbuild.com/iso/latest/$ISO_NAME"
-
-if [[ -e "$OUTPUT" || -L "$OUTPUT" ]]; then
-    echo "Error: output already exists: $OUTPUT" >&2
-    exit 1
-fi
 
 for cmd in curl sha256sum mktemp ln; do
     command -v "$cmd" >/dev/null || {
@@ -25,18 +17,28 @@ done
 
 CHECKSUMS=$(curl -fsSL "$CHECKSUM_URL")
 EXPECTED=""
+ISO_NAME=""
 while IFS= read -r line; do
-    if [[ "$line" =~ ^([[:xdigit:]]{64})[[:space:]]+[*]?archlinux-x86_64\.iso$ ]]; then
+    if [[ "$line" =~ ^([[:xdigit:]]{64})[[:space:]]+[*]?(archlinux-([0-9]{4}\.[0-9]{2}\.[0-9]{2})-x86_64\.iso)$ ]]; then
         if [[ -n "$EXPECTED" ]]; then
             echo "Error: multiple ISO checksums found." >&2
             exit 1
         fi
         EXPECTED="${BASH_REMATCH[1],,}"
+        ISO_NAME="${BASH_REMATCH[2]}"
+        RELEASE="${BASH_REMATCH[3]}"
     fi
 done <<< "$CHECKSUMS"
 
 if [[ -z "$EXPECTED" ]]; then
     echo "Error: ISO checksum not found." >&2
+    exit 1
+fi
+
+OUTPUT="${1:-$ISO_NAME}"
+ISO_URL="https://fastly.mirror.pkgbuild.com/iso/$RELEASE/$ISO_NAME"
+if [[ -e "$OUTPUT" || -L "$OUTPUT" ]]; then
+    echo "Error: output already exists: $OUTPUT" >&2
     exit 1
 fi
 
