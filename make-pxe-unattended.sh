@@ -3,10 +3,13 @@ set -Eeuo pipefail
 
 ISO_ROOT="/srv/tftp/archiso"
 SFS="$ISO_ROOT/arch/x86_64/airootfs.sfs"
+
 DISK="/dev/sda"
 USERNAME="dk"
 HOSTNAME="arch"
+
 WORK="/var/tmp/arch-pxe-build"
+ROOTFS="$WORK/rootfs"
 
 # ---------------------------------------------------------
 # Host-side checks
@@ -40,15 +43,24 @@ if [[ -e "$SFS.original" ]]; then
     exit 1
 fi
 
+if [[ -e "$WORK" ]]; then
+    echo "Temporary directory already exists: $WORK"
+    echo "Remove it manually before running this script again."
+    exit 1
+fi
+
+echo
 echo "========================================"
 echo " Arch Linux unattended PXE installer"
 echo "========================================"
 echo
-echo "Target disk: $DISK"
-echo "Partitioning: MBR"
-echo "Filesystem: ext4"
-echo "Bootloader: GRUB (BIOS)"
-echo "User: $USERNAME"
+echo "ISO directory: $ISO_ROOT"
+echo "Target disk:   $DISK"
+echo "Partitioning:  MBR"
+echo "Filesystem:    ext4"
+echo "Bootloader:    GRUB (BIOS)"
+echo "Hostname:      $HOSTNAME"
+echo "User:          $USERNAME"
 echo
 
 read -rsp "Password for $USERNAME: " PASSWORD
@@ -65,8 +77,10 @@ PASSWORD_HASH=$(printf '%s' "$PASSWORD" | openssl passwd -6 -stdin)
 unset PASSWORD PASSWORD_CONFIRM
 
 # ---------------------------------------------------------
-# Prepare temporary workspace
+# Prepare workspace
 # ---------------------------------------------------------
+
+mkdir -p "$ROOTFS"
 
 cleanup() {
     rm -rf "$WORK"
@@ -74,10 +88,9 @@ cleanup() {
 
 trap cleanup EXIT
 
-mkdir -p "$WORK"
-
-ROOTFS="$WORK/rootfs"
-mkdir -p "$ROOTFS"
+# ---------------------------------------------------------
+# Extract original SquashFS
+# ---------------------------------------------------------
 
 echo
 echo "Extracting airootfs.sfs..."
@@ -89,33 +102,33 @@ unsquashfs -d "$ROOTFS" "$SFS"
 # ---------------------------------------------------------
 
 CONFIG_DIR="$ROOTFS/root/pxe-install"
+
 mkdir -p "$CONFIG_DIR"
 
-export PASSWORD_HASH USERNAME
+# IMPORTANT:
+# Export ROOTFS so Python writes into the extracted
+# filesystem, not the host's actual /root directory.
+
+export PASSWORD_HASH USERNAME ROOTFS HOSTNAME
+
+echo
+echo "Generating Archinstall configuration..."
 
 python3 <<'PY'
 import json
 import os
 from pathlib import Path
 
-directory = Path("/root/pxe-install")
+directory = Path(os.environ["ROOTFS"]) / "root/pxe-install"
+directory.mkdir(parents=True, exist_ok=True)
 
 config = {
     "archinstall-language": "English",
 
     "bootloader": "Grub",
-    "bootloader_config": {
-        "bootloader": "Grub",
-        "uki": False,
-        "removable": False
-    },
 
-    "disk_config": {
-        "config_type": "pre_mounted_config",
-        "mountpoint": "/mnt/archinstall"
-    },
+    "hostname": os.environ["HOSTNAME"],
 
-    "hostname": "arch",
     "kernels": ["linux"],
 
     "locale_config": {
@@ -130,24 +143,22 @@ config = {
         }
     },
 
-    "network_config": {
-        "type": "manual",
-        "nics": [
-            {
-                "iface": "eth0",
-                "dhcp": True
-            }
-        ]
-    },
-
     "ntp": True,
-    "offline": False,
+
     "packages": ["git"],
+
     "profile_config": None,
-    "script": "guided",
+
     "silent": True,
+
     "swap": False,
-    "timezone": "Europe/Lisbon"
+
+    "timezone": "Europe/Lisbon",
+
+    "disk_config": {
+        "config_type": "pre_mounted_config",
+        "mountpoint": "/mnt/archinstall"
+    }
 }
 
 credentials = {
@@ -168,17 +179,27 @@ credentials = {
     json.dumps(credentials, indent=2) + "\n"
 )
 
+print("Configuration files created:")
+print(directory / "user_configuration.json")
+print(directory / "user_credentials.json")
 PY
+
+[[ -s "$CONFIG_DIR/user_configuration.json" ]]
+[[ -s "$CONFIG_DIR/user_credentials.json" ]]
 
 # ---------------------------------------------------------
 # Automatic installer
 # ---------------------------------------------------------
+
+echo
+echo "Creating automatic installer..."
 
 cat > "$ROOTFS/usr/local/bin/pxe-install.sh" <<'INSTALLER'
 #!/usr/bin/bash
 set -Eeuo pipefail
 
 LOG="/var/log/pxe-install.log"
+
 exec > >(tee -a "$LOG") 2>&1
 
 DISK="/dev/sda"
@@ -189,12 +210,14 @@ echo " Starting unattended Arch installation"
 echo "========================================"
 
 # Wait for network connectivity.
+
 echo "Waiting for network..."
 
 for i in $(seq 1 300); do
     if ip route get 1.1.1.1 >/dev/null 2>&1; then
         break
     fi
+
     sleep 2
 done
 
@@ -204,6 +227,7 @@ ip route get 1.1.1.1 >/dev/null 2>&1 || {
 }
 
 # Verify target disk.
+
 if [[ ! -b "$DISK" ]]; then
     echo "Target disk not found: $DISK"
     exit 1
@@ -212,11 +236,17 @@ fi
 echo "Target disk information:"
 lsblk "$DISK"
 
-# Unmount any previous mounts.
+# Unmount previous mounts.
+
 umount -R "$MOUNT" 2>/dev/null || true
 
-# DESTROYS THE ENTIRE TARGET DISK.
+# ---------------------------------------------------------
+# Partition disk
+# ---------------------------------------------------------
+
 echo "Partitioning $DISK..."
+
+# WARNING: THIS ERASES THE ENTIRE DISK.
 
 sfdisk --wipe always --wipe-partitions always "$DISK" <<'EOF'
 label: dos
@@ -229,23 +259,34 @@ EOF
 partprobe "$DISK"
 udevadm settle
 
-# Format partitions.
+# ---------------------------------------------------------
+# Format partitions
+# ---------------------------------------------------------
+
 echo "Formatting partitions..."
 
 mkfs.ext4 -F "${DISK}1"
 mkfs.ext4 -F "${DISK}2"
 
-# Mount target filesystem.
+# ---------------------------------------------------------
+# Mount target
+# ---------------------------------------------------------
+
 mkdir -p "$MOUNT"
 
 mount "${DISK}2" "$MOUNT"
+
 mkdir -p "$MOUNT/boot"
+
 mount "${DISK}1" "$MOUNT/boot"
 
 echo "Disk layout:"
 lsblk -f "$DISK"
 
-# Run Archinstall.
+# ---------------------------------------------------------
+# Run Archinstall
+# ---------------------------------------------------------
+
 echo "Starting Archinstall..."
 
 archinstall \
@@ -258,6 +299,7 @@ echo "Installation completed successfully."
 sync
 
 echo "Rebooting..."
+
 systemctl reboot
 INSTALLER
 
@@ -267,7 +309,11 @@ chmod 755 "$ROOTFS/usr/local/bin/pxe-install.sh"
 # Systemd service
 # ---------------------------------------------------------
 
+echo
+echo "Creating systemd service..."
+
 mkdir -p "$ROOTFS/etc/systemd/system"
+mkdir -p "$ROOTFS/etc/systemd/system/multi-user.target.wants"
 
 cat > "$ROOTFS/etc/systemd/system/pxe-install.service" <<'SERVICE'
 [Unit]
@@ -287,8 +333,6 @@ TimeoutStartSec=infinity
 WantedBy=multi-user.target
 SERVICE
 
-mkdir -p "$ROOTFS/etc/systemd/system/multi-user.target.wants"
-
 ln -sfn \
     ../pxe-install.service \
     "$ROOTFS/etc/systemd/system/multi-user.target.wants/pxe-install.service"
@@ -305,10 +349,23 @@ mksquashfs "$ROOTFS" "$WORK/airootfs.sfs" \
     -comp zstd \
     -b 1M
 
-echo "Creating original image backup..."
+# ---------------------------------------------------------
+# Replace original image
+# ---------------------------------------------------------
+
+echo
+echo "Backing up original image..."
 
 mv "$SFS" "$SFS.original"
-mv "$WORK/airootfs.sfs" "$SFS"
+
+echo "Installing modified image..."
+
+if ! mv "$WORK/airootfs.sfs" "$SFS"; then
+    echo "Failed to replace image. Restoring original..."
+
+    mv "$SFS.original" "$SFS"
+    exit 1
+fi
 
 chmod 644 "$SFS"
 
@@ -317,10 +374,12 @@ echo "========================================"
 echo " PXE installer successfully configured!"
 echo "========================================"
 echo
-echo "Modified: $SFS"
-echo "Backup:   $SFS.original"
+echo "Modified image:"
+echo "  $SFS"
 echo
-echo "Boot your machine using your existing"
-echo "Arch Linux - Automated Installation entry."
+echo "Original backup:"
+echo "  $SFS.original"
 echo
-echo "The installer will start automatically."
+echo "Boot using your existing GRUB PXE entry."
+echo
+echo "The unattended installer will start automatically."
