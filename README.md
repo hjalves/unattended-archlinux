@@ -134,7 +134,7 @@ The generated installation uses:
 - Partition 2: remaining space, ext4, mounted at `/`
 - Bootloader: GRUB for BIOS
 - Kernel: `linux`
-- Hostname: `arch`
+- Hostname: `dell`
 - User: `dk`
 - Locale: `en_US.UTF-8`
 - Keyboard layout: `uk`

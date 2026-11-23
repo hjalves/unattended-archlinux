@@ -11,7 +11,7 @@ SIGS=("$SFS.sig" "$SFS.cms.sig")
 
 DISK="/dev/sda"
 USERNAME="dk"
-HOSTNAME="arch"
+HOSTNAME="dell"
 
 WORK="/var/tmp/arch-pxe-build"
 ROOTFS="$WORK/rootfs"
