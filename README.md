@@ -4,10 +4,11 @@ This repository provides scripts for preparing an Arch Linux PXE boot image that
 
 The workflow is:
 
-1. Extract an Arch Linux ISO into `/srv/tftp/archiso`.
-2. Modify the extracted `airootfs.sfs` with an automatic installer.
-3. Boot the modified image using an existing GRUB PXE entry.
-4. The client partitions `/dev/sda`, formats it, installs Arch with `archinstall`, and reboots.
+1. Download an Arch Linux ISO.
+2. Extract the ISO into `/srv/tftp/archiso`.
+3. Modify the extracted `airootfs.sfs` with an automatic installer.
+4. Boot the modified image using an existing GRUB PXE entry.
+5. The client partitions `/dev/sda`, formats it, installs Arch with `archinstall`, and reboots.
 
 > **Warning:** The generated installer erases the entire `/dev/sda` disk on the client. Use it only on a disposable or correctly identified machine. Back up any data before booting it.
 
@@ -17,6 +18,7 @@ The workflow is:
 
 - Linux host with root or `sudo` access
 - `bash`
+- `curl` and `sha256sum` (for downloading the ISO)
 - `unsquashfs`
 - `mksquashfs`
 - `openssl`
@@ -37,17 +39,25 @@ The client must:
 
 ## Usage
 
-### 1. Extract the Arch ISO
+### 1. Download the Arch ISO
+
+```bash
+./download-archiso.sh
+```
+
+This downloads the latest x86_64 ISO as `archlinux-x86_64.iso` in the current directory and checks its SHA-256 checksum against Arch Linux's published checksum. An optional output path can be supplied; existing files are not overwritten. If the release changes during the download, retry the script.
+
+### 2. Extract the Arch ISO
 
 Run:
 
 ```bash
-./extract-archiso.sh /path/to/archlinux-x86_64.iso
+./extract-archiso.sh archlinux-x86_64.iso
 ```
 
 The script mounts the ISO read-only, copies its contents to `/srv/tftp/archiso`, and unmounts it when finished.
 
-### 2. Configure the unattended installer
+### 3. Configure the unattended installer
 
 Run as root:
 
