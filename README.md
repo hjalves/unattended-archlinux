@@ -142,7 +142,7 @@ The generated installation uses:
 - Time zone: `Europe/Lisbon`
 - NTP: enabled
 - Swap: disabled
-- Additional packages: `git`, `htop`, `less`, `openssh`, `terminus-font`
+- Additional packages: `git`, `htop`, `less`, `openssh`, `python`, `terminus-font`
 - SSH server: `sshd` enabled on boot
 - Networking: systemd-networkd with IPv4 DHCP on physical Ethernet interfaces; IPv6 disabled
 - DNS: systemd-resolved with multicast DNS enabled

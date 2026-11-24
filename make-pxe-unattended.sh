@@ -167,7 +167,7 @@ config = {
         }
     },
     "ntp": True,
-    "packages": ["git", "htop", "less", "openssh", "terminus-font"],
+    "packages": ["git", "htop", "less", "openssh", "python", "terminus-font"],
     "profile_config": None,
     "services": ["sshd", "systemd-networkd", "systemd-resolved"],
     "silent": True,
