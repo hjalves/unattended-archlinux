@@ -135,7 +135,7 @@ The generated installation uses:
 - Bootloader: GRUB for BIOS
 - Kernel: `linux`
 - Hostname: `dell`
-- User: `dk`
+- User: `dk`, with passwordless `sudo` (`/etc/sudoers.d/90_dk`)
 - Locale: `en_US.UTF-8`
 - Keyboard layout: `uk`
 - Console font: `ter-132b`
@@ -146,6 +146,7 @@ The generated installation uses:
 - SSH server: `sshd` enabled on boot
 - Networking: systemd-networkd with IPv4 DHCP on physical Ethernet interfaces; IPv6 disabled
 - DNS: systemd-resolved with multicast DNS enabled
+- Kernel command line: `quiet` removed so boot messages are shown; `consoleblank=600` blanks the console (and powers off the display) after 10 minutes of inactivity
 
 These values are defined near the top of `make-pxe-unattended.sh` and in the generated installer/configuration. Review and change them before running the script if they do not match your environment.
 

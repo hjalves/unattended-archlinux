@@ -205,8 +205,8 @@ PY
 [[ -s "$CONFIG_DIR/user_configuration.json" ]]
 [[ -s "$CONFIG_DIR/user_credentials.json" ]]
 
-# Pass the target disk to the installer.
-printf 'DISK=%q\n' "$DISK" > "$CONFIG_DIR/install.env"
+# Pass the target disk and user name to the installer.
+printf 'DISK=%q\nUSERNAME=%q\n' "$DISK" "$USERNAME" > "$CONFIG_DIR/install.env"
 
 # ---------------------------------------------------------
 # Automatic installer
@@ -366,6 +366,34 @@ LinkLocalAddressing=ipv4
 NETWORK
 
 ln -sfnT /run/systemd/resolve/stub-resolv.conf "$MOUNT/etc/resolv.conf"
+
+echo "Configuring passwordless sudo for $USERNAME..."
+
+# Archinstall writes /etc/sudoers.d/00_<user> with "<user> ALL=(ALL) ALL".
+# sudo applies the last matching rule, so this file must sort after it.
+SUDOERS_FILE="$MOUNT/etc/sudoers.d/90_$USERNAME"
+printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$USERNAME" > "$SUDOERS_FILE"
+chmod 0440 "$SUDOERS_FILE"
+arch-chroot "$MOUNT" visudo -c
+
+echo "Configuring kernel command line..."
+
+# Show boot messages (no "quiet") and blank the console after 10 minutes
+# of inactivity, which also powers off the display.
+GRUB_DEFAULT_FILE="$MOUNT/etc/default/grub"
+sed -i -E '/^GRUB_CMDLINE_LINUX_DEFAULT=/{
+    s/\<(quiet|consoleblank=[0-9]*)\>//g
+    s/"$/ consoleblank=600"/
+    s/[[:space:]]+/ /g
+    s/=" /="/
+}' "$GRUB_DEFAULT_FILE"
+grep '^GRUB_CMDLINE_LINUX_DEFAULT=' "$GRUB_DEFAULT_FILE"
+arch-chroot "$MOUNT" grub-mkconfig -o /boot/grub/grub.cfg
+
+if ! grep -q 'consoleblank=600' "$MOUNT/boot/grub/grub.cfg"; then
+    echo "consoleblank=600 is missing from the target grub.cfg." >&2
+    exit 1
+fi
 
 # Marker for the PXE GRUB menu: when it finds this file on a local disk,
 # it boots that disk by default instead of reinstalling.
